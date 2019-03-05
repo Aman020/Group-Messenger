@@ -1,6 +1,7 @@
 package edu.buffalo.cse.cse486586.groupmessenger2;
 
 import android.app.Activity;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
 import android.view.Menu;
@@ -48,6 +49,10 @@ public class GroupMessengerActivity extends Activity {
                 Button send = (Button) findViewById(R.id.button4);
                 String message = send.getText().toString();
                 send.setText("");
+                TextView displayText = (TextView) findViewById(R.id.textView1);
+                displayText.append("\n");
+                new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR,message);
+
 
 
             }
@@ -57,6 +62,15 @@ public class GroupMessengerActivity extends Activity {
 
 
     }
+
+    private class ClientTask extends AsyncTask<String, Void,Void>{
+        @Override
+        protected Void doInBackground(String... strings) {
+            return null;
+        }
+    }
+
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
