@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import java.io.DataInputStream;
@@ -22,17 +23,36 @@ import java.util.*;
 
 /**
  * GroupMessengerActivity is the main Activity for the assignment.
- * 
+ *
  * @author stevko
  *
  */
 public class GroupMessengerActivity extends Activity {
+
+    class Message{
+        int sequenceNo;
+        String text;
+        int proposedSequenceNo;
+        Message(String text, int sequenceNo, int proposedSequenceNo )
+        {
+            this.text = text;
+            this.sequenceNo = sequenceNo;
+            this.proposedSequenceNo = proposedSequenceNo;
+        }
+    }
+
+
     private final static int SERVER_PORT = 10000;
     private static final String TAG = GroupMessengerActivity.class.getSimpleName();
     private static final String [] ports = new String[] {"11108","11112","11116","11120","11124"};
     private  static  final Uri CONTENT_URI = Uri.parse("content://edu.buffalo.cse.cse486586.groupmessenger2.provider");
     Socket[] sockets = new Socket[5];
     int sequenceNumber =0;
+    int globalProposedNo=-1;
+    int globalSequenceNo=-1;
+    int globalAgreedNo =-1;
+
+
     HashMap<String,Double> sequenceNumberMap = new HashMap<String, Double>();
 
     @Override
@@ -46,14 +66,14 @@ public class GroupMessengerActivity extends Activity {
          */
         TextView tv = (TextView) findViewById(R.id.textView1);
         tv.setMovementMethod(new ScrollingMovementMethod());
-        
+
         /*
          * Registers OnPTestClickListener for "button1" in the layout, which is the "PTest" button.
          * OnPTestClickListener demonstrates how to access a ContentProvider.
          */
         findViewById(R.id.button1).setOnClickListener(
                 new OnPTestClickListener(tv, getContentResolver()));
-        
+
 
         try
         {
@@ -75,9 +95,9 @@ public class GroupMessengerActivity extends Activity {
         findViewById(R.id.button4).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Button sendButton = (Button) findViewById(R.id.button4);
-                String message = sendButton.getText().toString();
-                sendButton.setText("");
+                EditText editTextMessage = (EditText) findViewById(R.id.editText1);
+                String message = editTextMessage.getText().toString();
+                editTextMessage.setText("");
                 TextView displayText = (TextView) findViewById(R.id.textView1);
                 displayText.append("\n");
                 new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR,message);
@@ -103,13 +123,33 @@ public class GroupMessengerActivity extends Activity {
                 {
                     Socket socket = serverSocket.accept();
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
-                    String messageFromClient = inputStream.readUTF();
-                    Log.i("Client message", " Received message at server -" +messageFromClient);
+                        String messageFromClient = inputStream.readUTF();
+                    String []  messageFromClientToken = messageFromClient.split(":");
 
+                    Log.i("message received", messageFromClient);
+                    Log.i("Token Length", String.valueOf(messageFromClientToken.length));
 
-                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                    outputStream.writeUTF(String.valueOf(++sequenceNumber + (Double.valueOf(processID)/10000)) );
-                    outputStream.flush();
+                    int proposedSequenceNoYet = Integer.valueOf(messageFromClientToken[2]);
+                    String messageText = messageFromClientToken[0];
+                    int sequenceNoOfMessage = Integer.valueOf(messageFromClientToken[1]);
+
+                    Log.i("In Server", "Before If condition");
+
+                    if(messageFromClientToken.length <= 3)
+                    {
+                        Log.i("Port No- -----------", processID);
+                        Log.i("Client message at " + processID + "----", " Received message at server -" +messageFromClient);
+                        Log.i("Seq no of a message", messageFromClientToken[1]);
+                        Log.i("proposed Seq no", messageFromClientToken[2]);
+                        int max = 1 + Math.max(globalAgreedNo, globalProposedNo);
+                        if(max < proposedSequenceNoYet) globalProposedNo = proposedSequenceNoYet;
+                        else globalProposedNo = max;
+                        DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                        outputStream.writeUTF(messageFromClientToken[0] + ":" +  sequenceNoOfMessage + ":" + globalProposedNo);
+                        outputStream.flush();
+
+                    }
+                    Log.i("In Server"," After if Condition");
 
                 }
 
@@ -132,22 +172,31 @@ public class GroupMessengerActivity extends Activity {
     }
 
     private class ClientTask extends AsyncTask<String, Void,Void>{
-        List<Double> proposedSequenceNumber = new ArrayList();
         @Override
         protected Void doInBackground(String... strings) {
+
+
+
+            globalProposedNo = 1 + Math.max(globalAgreedNo,globalProposedNo);
+            int CurrentMaxPriority = globalProposedNo;
+            Message m = new Message(strings[0],globalSequenceNo++, globalProposedNo);
             int i =0;
             String messageToSend = strings[0];
             try {
-                while (i <= ports.length) {
+                while (i < ports.length) {
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(ports[i]));
                     DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                    outputStream.writeUTF(messageToSend);
+                    outputStream.writeUTF(m.text + ":" + String.valueOf( m.sequenceNo) + ":" + String.valueOf( m.proposedSequenceNo));
                     outputStream.flush();
-
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
                     String responseFromServer = inputStream.readUTF();
-                    proposedSequenceNumber.add(Double.valueOf(responseFromServer));
+                    String [] responseFromServerToken = responseFromServer.split(":");
+                    CurrentMaxPriority = Math.max(CurrentMaxPriority, Integer.parseInt(responseFromServerToken[2]));
+
+
+
+
                     Log.i("Response from serer", "Response received-" + responseFromServer);
                     outputStream.close();
                     inputStream.close();
@@ -156,17 +205,43 @@ public class GroupMessengerActivity extends Activity {
                     i++;
                 }
 
-                double maxSequenceNumberReceived = getMaxValue(proposedSequenceNumber);
 
-                Log.i("Max value-" ,String.valueOf(maxSequenceNumberReceived));
+
+               // double maxSequenceNumberReceived = getMaxValue(proposedSequenceNumber);
+
+               // Log.i("Max value-" ,String.valueOf(maxSequenceNumberReceived));
 
             }
             catch(Exception ex)
             {
                 ex.printStackTrace();
             }
+            try {
 
 
+                while (i < ports.length) {
+                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(ports[i]));
+                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                    outputStream.writeUTF(m.text + ":" + String.valueOf(CurrentMaxPriority) + ":" + String.valueOf(m.proposedSequenceNo) + ":" + "deliver");
+                    outputStream.flush();
+                    DataInputStream inputStream = new DataInputStream(socket.getInputStream());
+                    String responseFromServer = inputStream.readUTF();
+                    String[] responseFromServerToken = responseFromServer.split(":");
+                    CurrentMaxPriority = Math.max(CurrentMaxPriority, Integer.parseInt(responseFromServerToken[2]));
+
+
+                    Log.i("Response from serer", "Response received-" + responseFromServer);
+                    outputStream.close();
+                    inputStream.close();
+                    socket.close();
+
+                    i++;
+                }
+            }catch (Exception ex)
+            {
+                ex.printStackTrace();
+            }
 
             return null;
         }
