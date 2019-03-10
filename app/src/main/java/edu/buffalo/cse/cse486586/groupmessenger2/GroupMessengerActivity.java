@@ -7,19 +7,14 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.telephony.TelephonyManager;
 import android.text.method.ScrollingMovementMethod;
-import android.util.Log;
 import android.view.Menu;
 import android.view.View;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.*;
 
 /**
  * GroupMessengerActivity is the main Activity for the assignment.
@@ -29,17 +24,7 @@ import java.util.*;
  */
 public class GroupMessengerActivity extends Activity {
 
-    class Message{
-        int sequenceNo;
-        String text;
-        int proposedSequenceNo;
-        Message(String text, int sequenceNo, int proposedSequenceNo )
-        {
-            this.text = text;
-            this.sequenceNo = sequenceNo;
-            this.proposedSequenceNo = proposedSequenceNo;
-        }
-    }
+
 
 
     private final static int SERVER_PORT = 10000;
@@ -47,13 +32,6 @@ public class GroupMessengerActivity extends Activity {
     private static final String [] ports = new String[] {"11108","11112","11116","11120","11124"};
     private  static  final Uri CONTENT_URI = Uri.parse("content://edu.buffalo.cse.cse486586.groupmessenger2.provider");
     Socket[] sockets = new Socket[5];
-    int sequenceNumber =0;
-    int globalProposedNo=-1;
-    int globalSequenceNo=-1;
-    int globalAgreedNo =-1;
-
-
-    HashMap<String,Double> sequenceNumberMap = new HashMap<String, Double>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -114,7 +92,7 @@ public class GroupMessengerActivity extends Activity {
         @Override
         protected Void doInBackground(ServerSocket... serverSockets) {
 
-            try{
+            try {
                 TelephonyManager tel = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
                 String processID = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
 
@@ -123,140 +101,37 @@ public class GroupMessengerActivity extends Activity {
                 {
                     Socket socket = serverSocket.accept();
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
-                        String messageFromClient = inputStream.readUTF();
-                    String []  messageFromClientToken = messageFromClient.split(":");
 
-                    Log.i("message received", messageFromClient);
-                    Log.i("Token Length", String.valueOf(messageFromClientToken.length));
 
-                    int proposedSequenceNoYet = Integer.valueOf(messageFromClientToken[2]);
-                    String messageText = messageFromClientToken[0];
-                    int sequenceNoOfMessage = Integer.valueOf(messageFromClientToken[1]);
 
-                    Log.i("In Server", "Before If condition");
-
-                    if(messageFromClientToken.length <= 3)
-                    {
-                        Log.i("Port No- -----------", processID);
-                        Log.i("Client message at " + processID + "----", " Received message at server -" +messageFromClient);
-                        Log.i("Seq no of a message", messageFromClientToken[1]);
-                        Log.i("proposed Seq no", messageFromClientToken[2]);
-                        int max = 1 + Math.max(globalAgreedNo, globalProposedNo);
-                        if(max < proposedSequenceNoYet) globalProposedNo = proposedSequenceNoYet;
-                        else globalProposedNo = max;
-                        DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                        outputStream.writeUTF(messageFromClientToken[0] + ":" +  sequenceNoOfMessage + ":" + globalProposedNo);
-                        outputStream.flush();
-
-                    }
-                    Log.i("In Server"," After if Condition");
 
                 }
 
+
             }
-            catch(Exception ex)
-            {
+            catch (Exception ex) {
                 ex.printStackTrace();
-
             }
-
-
-
             return null;
         }
 
-        @Override
+
         protected void onProgressUpdate(String... values) {
-            super.onProgressUpdate(values);
+
+            return ;
         }
     }
 
-    private class ClientTask extends AsyncTask<String, Void,Void>{
+    private class ClientTask extends AsyncTask<String, Void,Void> {
         @Override
         protected Void doInBackground(String... strings) {
 
 
-
-            globalProposedNo = 1 + Math.max(globalAgreedNo,globalProposedNo);
-            int CurrentMaxPriority = globalProposedNo;
-            Message m = new Message(strings[0],globalSequenceNo++, globalProposedNo);
-            int i =0;
-            String messageToSend = strings[0];
-            try {
-                while (i < ports.length) {
-                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(ports[i]));
-                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                    outputStream.writeUTF(m.text + ":" + String.valueOf( m.sequenceNo) + ":" + String.valueOf( m.proposedSequenceNo));
-                    outputStream.flush();
-                    DataInputStream inputStream = new DataInputStream(socket.getInputStream());
-                    String responseFromServer = inputStream.readUTF();
-                    String [] responseFromServerToken = responseFromServer.split(":");
-                    CurrentMaxPriority = Math.max(CurrentMaxPriority, Integer.parseInt(responseFromServerToken[2]));
-
-
-
-
-                    Log.i("Response from serer", "Response received-" + responseFromServer);
-                    outputStream.close();
-                    inputStream.close();
-                    socket.close();
-
-                    i++;
-                }
-
-
-
-               // double maxSequenceNumberReceived = getMaxValue(proposedSequenceNumber);
-
-               // Log.i("Max value-" ,String.valueOf(maxSequenceNumberReceived));
-
-            }
-            catch(Exception ex)
-            {
-                ex.printStackTrace();
-            }
-            try {
-
-
-                while (i < ports.length) {
-                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(ports[i]));
-                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                    outputStream.writeUTF(m.text + ":" + String.valueOf(CurrentMaxPriority) + ":" + String.valueOf(m.proposedSequenceNo) + ":" + "deliver");
-                    outputStream.flush();
-                    DataInputStream inputStream = new DataInputStream(socket.getInputStream());
-                    String responseFromServer = inputStream.readUTF();
-                    String[] responseFromServerToken = responseFromServer.split(":");
-                    CurrentMaxPriority = Math.max(CurrentMaxPriority, Integer.parseInt(responseFromServerToken[2]));
-
-
-                    Log.i("Response from serer", "Response received-" + responseFromServer);
-                    outputStream.close();
-                    inputStream.close();
-                    socket.close();
-
-                    i++;
-                }
-            }catch (Exception ex)
-            {
-                ex.printStackTrace();
-            }
-
             return null;
         }
     }
-    private double getMaxValue(List<Double> list)
-    {
-        double max = Float.MIN_VALUE;
-        double current =0.0;
-        for(int i =0; i < list.size();i++)
-        {
-            if ((current = list.get(i)) > max) max = current;
-        }
-        return max;
 
-    }
+
 
 
 
@@ -267,4 +142,5 @@ public class GroupMessengerActivity extends Activity {
         getMenuInflater().inflate(R.menu.activity_group_messenger, menu);
         return true;
     }
+
 }
