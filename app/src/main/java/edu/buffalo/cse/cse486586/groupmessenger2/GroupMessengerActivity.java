@@ -137,10 +137,9 @@ public class GroupMessengerActivity extends Activity {
             String messageSendingPort = strings[1];
             int currentMaxProposedNo=0;
 
-
-
             try {
-                sendingMessageFromClient(messageSendingPort,messageText,currentMaxProposedNo, true);
+                currentMaxProposedNo = sendingMessageFromClientFirstTime (messageSendingPort,messageText,currentMaxProposedNo);
+                sendingMessageFromClientToDeliver(messageSendingPort,messageText,currentMaxProposedNo);
                 }
             catch(Exception ex)
             {
@@ -151,8 +150,7 @@ public class GroupMessengerActivity extends Activity {
         }
     }
 
-    private String getSendingMessage( String sendingPort,  String messageText,int myLargestProposedSeqNo, boolean isFirstTime,String delimeter)
-    {
+    private String getSendingMessage( String sendingPort,  String messageText,int myLargestProposedSeqNo, boolean isFirstTime,String delimeter) {
         if(isFirstTime)
             return sendingPort + delimeter + messageText + delimeter + String.valueOf(myLargestProposedSeqNo);
         else
@@ -172,10 +170,8 @@ public class GroupMessengerActivity extends Activity {
 
 
     }
+    private int sendingMessageFromClientFirstTime(String messageSendingPort, String messageText, int currentMaxProposedNo) throws Exception {
 
-    private void sendingMessageFromClient(String messageSendingPort, String messageText, int currentMaxProposedNo, boolean isFirstTime) throws Exception {
-
-        if( isFirstTime) {
             try {
                 int i = 0;
                 while (i < ports.length) {
@@ -197,30 +193,32 @@ public class GroupMessengerActivity extends Activity {
                     i++;
 
                 }
-            } catch (Exception ex) {
-                throw ex;
-            }
-        }
-        else
-        {
-            try {
-                int i = 0;
-                while (i < ports.length) {
-                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(ports[i]));
-                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                    Log.i("\nClient - " + messageSendingPort, "SENDING MESSAGE-" + getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo, false," "));
-                    outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo, isFirstTime, " "));
-                    outputStream.flush();
-                    Log.i("\nClient - " + messageSendingPort, "MESSAGE SENT");
-                    i++;
-
-                }
+                return  currentMaxProposedNo;
             } catch (Exception ex) {
                 throw ex;
             }
 
+
+
         }
+    private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, int currentMaxProposedNo) throws Exception {
+        try {
+            int i = 0;
+            while (i < ports.length) {
+                Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                        Integer.parseInt(ports[i]));
+                DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                Log.i("\nClient - " + messageSendingPort, "SENDING MESSAGE-" + getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo, false," "));
+                outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo, false, " "));
+                outputStream.flush();
+                Log.i("\nClient - " + messageSendingPort, "MESSAGE SENT");
+                i++;
+
+            }
+        } catch (Exception ex) {
+            throw ex;
+        }
+
     }
 
 
