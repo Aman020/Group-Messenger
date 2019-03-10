@@ -7,12 +7,15 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.telephony.TelephonyManager;
 import android.text.method.ScrollingMovementMethod;
+import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
 
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -33,15 +36,17 @@ public class GroupMessengerActivity extends Activity {
     private  static  final Uri CONTENT_URI = Uri.parse("content://edu.buffalo.cse.cse486586.groupmessenger2.provider");
     Socket[] sockets = new Socket[5];
 
+    static int myLargestProposedSeqNo=0;
+    static int LargestAgreedSeqNo =0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_group_messenger);
 
-        /*
-         * TODO: Use the TextView to display your messages. Though there is no grading component
-         * on how you display the messages, if you implement it, it'll make your debugging easier.
-         */
+        TelephonyManager tel = (TelephonyManager) this.getSystemService(Context.TELEPHONY_SERVICE);
+        final String processId = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
+
         TextView tv = (TextView) findViewById(R.id.textView1);
         tv.setMovementMethod(new ScrollingMovementMethod());
 
@@ -78,7 +83,7 @@ public class GroupMessengerActivity extends Activity {
                 editTextMessage.setText("");
                 TextView displayText = (TextView) findViewById(R.id.textView1);
                 displayText.append("\n");
-                new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR,message);
+                new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR,message, String.valueOf(Integer.valueOf(processId) * 2));
 
 
             }
@@ -95,6 +100,8 @@ public class GroupMessengerActivity extends Activity {
             try {
                 TelephonyManager tel = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
                 String processID = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
+                Log.i("\nSERVER- " +Integer.valueOf(processID)*2, " My PROCESS ID-" + processID);
+                Log.i("\nSERVER-"+Integer.valueOf(processID)*2, " My PORT NO-" + Integer.valueOf(processID)*2);
 
                 ServerSocket serverSocket = serverSockets[0];
                 while(true)
@@ -126,10 +133,97 @@ public class GroupMessengerActivity extends Activity {
         @Override
         protected Void doInBackground(String... strings) {
 
+            String messageText = strings[0];
+            String messageSendingPort = strings[1];
+            int currentMaxProposedNo=0;
+
+
+
+            try {
+                sendingMessageFromClient(messageSendingPort,messageText,currentMaxProposedNo, true);
+                }
+            catch(Exception ex)
+            {
+                ex.printStackTrace();
+            }
 
             return null;
         }
     }
+
+    private String getSendingMessage( String sendingPort,  String messageText,int myLargestProposedSeqNo, boolean isFirstTime,String delimeter)
+    {
+        if(isFirstTime)
+            return sendingPort + delimeter + messageText + delimeter + String.valueOf(myLargestProposedSeqNo);
+        else
+            return sendingPort + delimeter + messageText + delimeter + String.valueOf(myLargestProposedSeqNo) + delimeter + "deliver";
+            //TODO Think something better to differenciate betwween the initital and to be delivered message
+
+    }
+    private int CalculateCurrentMaxProposedNo(int currentMaxProposedNo,String receivedMessageServer, String delimeter){
+
+            if (receivedMessageServer != "" && receivedMessageServer != null) {
+                String[] receivedMessageServerTokens = receivedMessageServer.split(delimeter);
+                return Math.max(currentMaxProposedNo, Integer.valueOf(receivedMessageServerTokens[2]));
+
+            }
+
+        return -1;
+
+
+    }
+
+    private void sendingMessageFromClient(String messageSendingPort, String messageText, int currentMaxProposedNo, boolean isFirstTime) throws Exception {
+
+        if( isFirstTime) {
+            try {
+                int i = 0;
+                while (i < ports.length) {
+                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(ports[i]));
+                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                    Log.i("\nClient - " + messageSendingPort, "SENDING MESSAGE-" + getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo,true, " "));
+                    outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo, true," "));
+                    outputStream.flush();
+                    Log.i("\nClient - " + messageSendingPort, "MESSAGE SENT");
+
+                    Log.i("\nClient-" + messageSendingPort, " RECEIVING THE PROPOSED NO FROM OTHER AVDS");
+
+                    DataInputStream inputStream = new DataInputStream(socket.getInputStream());
+                    String receivedMessageServer = inputStream.readUTF();
+
+                    currentMaxProposedNo = CalculateCurrentMaxProposedNo(currentMaxProposedNo, receivedMessageServer, " ");
+
+                    i++;
+
+                }
+            } catch (Exception ex) {
+                throw ex;
+            }
+        }
+        else
+        {
+            try {
+                int i = 0;
+                while (i < ports.length) {
+                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(ports[i]));
+                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                    Log.i("\nClient - " + messageSendingPort, "SENDING MESSAGE-" + getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo, false," "));
+                    outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, myLargestProposedSeqNo, isFirstTime, " "));
+                    outputStream.flush();
+                    Log.i("\nClient - " + messageSendingPort, "MESSAGE SENT");
+                    i++;
+
+                }
+            } catch (Exception ex) {
+                throw ex;
+            }
+
+        }
+    }
+
+
 
 
 
