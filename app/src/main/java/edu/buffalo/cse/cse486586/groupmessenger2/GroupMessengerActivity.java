@@ -121,6 +121,7 @@ public class GroupMessengerActivity extends Activity {
                         Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE SENT");
                         publishProgress(  messageFromClientTokens[2] + " -" + messageFromClientTokens[1]);
                         myLargestAgreedSeqNo = Integer.valueOf(messageFromClientTokens[2]);
+                        Log.i("SERVER-" + Integer.valueOf(processID) * 2, "My largest agreed sequence no -" + myLargestAgreedSeqNo);
 
                     }
 
