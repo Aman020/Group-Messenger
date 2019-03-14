@@ -19,14 +19,22 @@ import java.io.DataOutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * GroupMessengerActivity is the main Activity for the assignment.
@@ -59,6 +67,7 @@ public class GroupMessengerActivity extends Activity {
     static double myLargestAgreedSeqNo =0.0000;
     static double currentMaxProposedNo=0.00000;
     SortedMap<Double, String > messageToDeliverList = new TreeMap<Double, String>();
+    Queue<Message> deliveryQueue = new LinkedList<Message>();
     static int setCount =0;
     PriorityBlockingQueue<Message> holdBackQueue = new PriorityBlockingQueue<Message>(1000, new MessageCompare());
 
@@ -128,6 +137,7 @@ public class GroupMessengerActivity extends Activity {
     private class ServerTask extends AsyncTask<ServerSocket, String,Void>{
         @Override
         protected Void doInBackground(ServerSocket... serverSockets) {
+            ReentrantLock lock = new ReentrantLock();
 
             try {
                 TelephonyManager tel = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
@@ -146,42 +156,65 @@ public class GroupMessengerActivity extends Activity {
                     String [] messageFromClientTokens = messageFromClient.split(":");
                     Log.i("Message length--",String.valueOf(messageFromClientTokens.length));
 
-                    if( messageFromClientTokens.length == 3) ManipulateClientMessage(messageFromClientTokens,socket,processID);
+                    if( messageFromClientTokens.length == 3) {
+
+                        ManipulateClientMessage(messageFromClientTokens, socket, processID);
+                    }
                     else {
 
                         Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE TO BE DELIVERED--"+ messageFromClientTokens[0] + " -" + messageFromClientTokens[1]);
                         Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE SENT");
-                        messageToDeliverList.put(Double.valueOf(messageFromClientTokens[2]),messageFromClientTokens[1]);
-                        setCount++;
 
+                            Iterator value = holdBackQueue.iterator();
+                            while (value.hasNext()) {
 
-
-                        Set set = messageToDeliverList.entrySet();
-                        Iterator iterator = set.iterator();
-
-
-                            myLargestAgreedSeqNo = Double.valueOf(messageFromClientTokens[2]);
-
-                            while (iterator.hasNext()) {
-
-                                ContentValues content = new ContentValues();
-                                Map.Entry m = (Map.Entry) iterator.next();
-                                double key = (Double) m.getKey();
-                                String message = (String) m.getValue();
-
-                                Log.i("Delivered Message List" +  Integer.valueOf(processID) * 2, "key-" + key + " " +  "Message-"+message );
-
-
-
-                                publishProgress(key + " -" + m.getValue());
-                                content.put("key", String.valueOf(actualSequenceNo++));
-                                content.put("value", message);
-                                getContentResolver().insert(CONTENT_URI, content);
-
-                                Log.i("SERVER-" + Integer.valueOf(processID) * 2, "My largest agreed sequence no -" + myLargestAgreedSeqNo);
-                                messageToDeliverList.remove(key);
+                                Message msg = (Message) value.next();
+                                if (msg.messageText.equals(messageFromClientTokens[1])) {
+                                    holdBackQueue.remove(msg);
+                                    msg.mySequenceNo = Double.valueOf(messageFromClientTokens[0]);
+                                    msg.toBeDelivered = true;
+                                    holdBackQueue.add(msg);
+                                }
 
                             }
+
+                        //messageToDeliverList.put(Double.valueOf(messageFromClientTokens[2]),messageFromClientTokens[1]);
+                        //setCount++;
+
+                       // Set set = messageToDeliverList.entrySet();
+                        //Iterator iterator = set.iterator();
+
+                        if (holdBackQueue.peek() != null && holdBackQueue.peek().toBeDelivered == true) {
+                            deliveryQueue.add(holdBackQueue.poll());
+                        }
+                            myLargestAgreedSeqNo = Double.valueOf(messageFromClientTokens[2]);
+//
+//                            while (iterator.hasNext()) {
+//
+                                ContentValues content = new ContentValues();
+//                                Map.Entry m = (Map.Entry) iterator.next();
+//                                double key = (Double) m.getKey();
+//                                String message = (String) m.getValue();
+//
+//                                Log.i("Delivered Message List" +  Integer.valueOf(processID) * 2, "key-" + key + " " +  "Message-"+message );
+                               lock.lock();
+                                while(! deliveryQueue.isEmpty() && deliveryQueue.peek().toBeDelivered == true) {
+
+                                    Message message = deliveryQueue.poll();
+                                       Log.i("Final----", String.valueOf(actualSequenceNo) + "-" + message.messageText);
+                                        content.put("key", String.valueOf(actualSequenceNo++));
+                                        content.put("value", message.messageText);
+                                        getContentResolver().insert(CONTENT_URI, content);
+                                        publishProgress(actualSequenceNo + " -" + message.messageText);
+                                        lock.unlock();
+                                        Log.i("SERVER-" + Integer.valueOf(processID) * 2, "My largest agreed sequence no -" + myLargestAgreedSeqNo);
+                                        //messageToDeliverList.remove(key);
+
+
+                                }
+                                }
+
+
                         }
 
                         //for (Map.Entry<Integer, String> entry : map.entrySet()) {
@@ -189,7 +222,7 @@ public class GroupMessengerActivity extends Activity {
                        // }
 
 
-                    }
+                   // }
 
 
 
@@ -219,6 +252,9 @@ public class GroupMessengerActivity extends Activity {
             DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
             double myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
             myProposedSeqNo =  myProposedSeqNo + Double.valueOf(processID)*2/10000;
+
+            holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
+            Log.i("SERVER-"+Integer.valueOf(processID)*2,"Holdback Queue Data at head 1st time- " +  holdBackQueue.peek().messageText);
             Log.i("SERVER-"+Integer.valueOf(processID)*2, " My proposed sequence no-" +myProposedSeqNo);
             Log.i("SERVER-"+Integer.valueOf(processID)*2, "MESSAGE SENDING FROM SERVER" + Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
             outputStream.writeUTF(  Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
@@ -304,7 +340,7 @@ public class GroupMessengerActivity extends Activity {
                     i++;
 
                 }
-                Thread.sleep(500);
+               // Thread.sleep(500);
                 return  currentMaxProposedNo;
             } catch (Exception ex) {
                 throw ex;
@@ -327,7 +363,7 @@ public class GroupMessengerActivity extends Activity {
                 i++;
 
             }
-
+           // Thread.sleep(500);
         } catch (Exception ex) {
             throw ex;
         }
