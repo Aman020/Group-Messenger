@@ -19,12 +19,14 @@ import java.io.DataOutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.PriorityBlockingQueue;
 
 /**
  * GroupMessengerActivity is the main Activity for the assignment.
@@ -34,7 +36,18 @@ import java.util.TreeMap;
  */
 public class GroupMessengerActivity extends Activity {
 
-
+    private class Message
+        {
+        double mySequenceNo;
+        String messageText;
+        boolean toBeDelivered;
+        Message(double mySequenceNo, String messageText, boolean toBeDelivered)
+    {
+            this.mySequenceNo = mySequenceNo;
+            this.messageText = messageText;
+            this.toBeDelivered = toBeDelivered;
+        }
+    }
 
 
     private final static int SERVER_PORT = 10000;
@@ -43,9 +56,20 @@ public class GroupMessengerActivity extends Activity {
     private  static  final Uri CONTENT_URI = Uri.parse("content://edu.buffalo.cse.cse486586.groupmessenger2.provider");
     Socket[] sockets = new Socket[5];
     static int actualSequenceNo=0;
-    static int myLargestAgreedSeqNo =0;
-    static int currentMaxProposedNo=0;
-    SortedMap<Integer, String > messageToDeliverList = new TreeMap<Integer, String>();
+    static double myLargestAgreedSeqNo =0.0000;
+    static double currentMaxProposedNo=0.00000;
+    SortedMap<Double, String > messageToDeliverList = new TreeMap<Double, String>();
+    static int setCount =0;
+    PriorityBlockingQueue<Message> holdBackQueue = new PriorityBlockingQueue<Message>(1000, new MessageCompare());
+
+     private class MessageCompare implements Comparator<Message>
+     {
+         @Override
+         public int compare(Message lhs, Message rhs) {
+             if(lhs.mySequenceNo < rhs.mySequenceNo) return 1;
+             else return -1;
+         }
+     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -127,18 +151,28 @@ public class GroupMessengerActivity extends Activity {
 
                         Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE TO BE DELIVERED--"+ messageFromClientTokens[0] + " -" + messageFromClientTokens[1]);
                         Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE SENT");
-                        messageToDeliverList.put(Integer.valueOf(messageFromClientTokens[2]),messageFromClientTokens[1]);
+                        messageToDeliverList.put(Double.valueOf(messageFromClientTokens[2]),messageFromClientTokens[1]);
+                        setCount++;
+
+
+
                         Set set = messageToDeliverList.entrySet();
                         Iterator iterator = set.iterator();
 
 
-                           myLargestAgreedSeqNo = Integer.valueOf(messageFromClientTokens[2]);
+                            myLargestAgreedSeqNo = Double.valueOf(messageFromClientTokens[2]);
 
                             while (iterator.hasNext()) {
+
                                 ContentValues content = new ContentValues();
                                 Map.Entry m = (Map.Entry) iterator.next();
-                                int key = (Integer) m.getKey();
+                                double key = (Double) m.getKey();
                                 String message = (String) m.getValue();
+
+                                Log.i("Delivered Message List" +  Integer.valueOf(processID) * 2, "key-" + key + " " +  "Message-"+message );
+
+
+
                                 publishProgress(key + " -" + m.getValue());
                                 content.put("key", String.valueOf(actualSequenceNo++));
                                 content.put("value", message);
@@ -148,6 +182,7 @@ public class GroupMessengerActivity extends Activity {
                                 messageToDeliverList.remove(key);
 
                             }
+                        }
 
                         //for (Map.Entry<Integer, String> entry : map.entrySet()) {
                        //     System.out.println(entry.getKey() + " => " + entry.getValue());
@@ -156,7 +191,7 @@ public class GroupMessengerActivity extends Activity {
 
                     }
 
-                }
+
 
 
             }
@@ -182,8 +217,9 @@ public class GroupMessengerActivity extends Activity {
         try
         {
             DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-            int myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
-            Log.i("SERVER-"+Integer.valueOf(processID)*2, " My proposed sequence no-" + myProposedSeqNo);
+            double myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
+            myProposedSeqNo =  myProposedSeqNo + Double.valueOf(processID)*2/10000;
+            Log.i("SERVER-"+Integer.valueOf(processID)*2, " My proposed sequence no-" +myProposedSeqNo);
             Log.i("SERVER-"+Integer.valueOf(processID)*2, "MESSAGE SENDING FROM SERVER" + Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
             outputStream.writeUTF(  Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
             outputStream.flush();
@@ -223,7 +259,7 @@ public class GroupMessengerActivity extends Activity {
         }
     }
 
-    private String getSendingMessage( String sendingPort,  String messageText,int myLargestProposedSeqNo, boolean isFirstTime,String delimeter) {
+    private String getSendingMessage( String sendingPort,  String messageText,double myLargestProposedSeqNo, boolean isFirstTime,String delimeter) {
         if(isFirstTime)
             return sendingPort + delimeter + messageText + delimeter + String.valueOf(myLargestProposedSeqNo);
         else
@@ -231,11 +267,13 @@ public class GroupMessengerActivity extends Activity {
             //TODO Think something better to differenciate betwween the initital and to be delivered message
 
     }
-    private synchronized int  CalculateCurrentMaxProposedNo(int currentMaxProposedNo,String receivedMessageServer, String delimeter){
+    private  double  CalculateCurrentMaxProposedNo(double currentMaxProposedNo,String receivedMessageServer, String delimeter){
 
             if (receivedMessageServer != "" && receivedMessageServer != null) {
                 String []receivedMessageServerTokens = receivedMessageServer.split(delimeter);
-                return Math.max(currentMaxProposedNo, Integer.valueOf(receivedMessageServerTokens[2]));
+                return Math.max(currentMaxProposedNo, Double.valueOf(receivedMessageServerTokens[2]));
+
+
 
             }
 
@@ -243,7 +281,7 @@ public class GroupMessengerActivity extends Activity {
 
 
     }
-    private int sendingMessageFromClientFirstTime(String messageSendingPort, String messageText, int currentMaxProposedNo) throws Exception {
+    private double sendingMessageFromClientFirstTime(String messageSendingPort, String messageText, double currentMaxProposedNo) throws Exception {
 
             try {
                 int i = 0;
@@ -275,7 +313,7 @@ public class GroupMessengerActivity extends Activity {
 
 
         }
-    private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, int currentMaxProposedNo) throws Exception {
+    private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, double currentMaxProposedNo) throws Exception {
         try {
             int i = 0;
             while (i < ports.length) {
