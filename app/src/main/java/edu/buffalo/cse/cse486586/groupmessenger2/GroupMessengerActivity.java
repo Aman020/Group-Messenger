@@ -72,6 +72,7 @@ public class GroupMessengerActivity extends Activity {
     static double currentMaxProposedNo=0.00000;
     SortedMap<Double, String > messageToDeliverList = new TreeMap<Double, String>();
     Queue<Message> deliveryQueue = new LinkedList<Message>();
+    List<Message> holdbackList =  new ArrayList<Message>();
     List<Message> deliveryMessageList  = new ArrayList<Message>();
     static int setCount =0;
     PriorityBlockingQueue<Message> holdBackQueue = new PriorityBlockingQueue<Message>(1000, new MessageCompare());
@@ -166,47 +167,27 @@ public class GroupMessengerActivity extends Activity {
                         Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE TO BE DELIVERED--" + messageFromClientTokens[0] + " -" + messageFromClientTokens[1]);
                         Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE SENT");
 
-                        Iterator value = holdBackQueue.iterator();
-                        while (value.hasNext()) {
-
-                            Message msg = (Message) value.next();
-                            if (msg.messageText.equals(messageFromClientTokens[1])) {
-                                holdBackQueue.remove(msg);
-                                msg.mySequenceNo = Double.valueOf(messageFromClientTokens[0]);
-                                msg.toBeDelivered = true;
-
-                                holdBackQueue.add(msg);
-                            }
-
-                        }
-
-
-                        while (holdBackQueue.peek() != null && holdBackQueue.peek().toBeDelivered == true) {
-                            Message toDeliverMessage = holdBackQueue.poll();
-                            toDeliverMessage.mySequenceNo = toDeliverMessage.mySequenceNo > myLargestAgreedSeqNo ? toDeliverMessage.mySequenceNo : myLargestAgreedSeqNo;
-                            deliveryMessageList.add(toDeliverMessage);
-                            deliveryQueue.add(toDeliverMessage);
-                            setCount++;
-                        }
                         myLargestAgreedSeqNo = Double.valueOf(messageFromClientTokens[2]);
                         ContentValues content = new ContentValues();
 
                         //while (!deliveryQueue.isEmpty() && deliveryQueue.peek().toBeDelivered == true) {
-                        for(int i =0 ; i< deliveryMessageList.size();i ++)
-                        {
-                            Log.i("Item " + i , deliveryMessageList.get(i).messageText + "--" + deliveryMessageList.get(i).mySequenceNo );
+
+                        for (int i = 0; i < holdbackList.size(); i++) {
+                            if (holdbackList.get(i).messageText.equals(messageFromClientTokens[1])) {
+                                Message toUpdateMessage = holdbackList.remove(i);
+                                toUpdateMessage.mySequenceNo = Double.valueOf(messageFromClientTokens[2]);
+                                holdbackList.add(toUpdateMessage);
+                                setCount++;
+                                break;
+                            }
+
                         }
-                        Collections.sort(deliveryMessageList,new MessageCompare());
-                        Log.i("List", " After sort");
-                        for(int i =0 ; i< deliveryMessageList.size();i ++)
-                        {
-                            Log.i("Item " + i , deliveryMessageList.get(i).messageText + "--" + deliveryMessageList.get(i).mySequenceNo );
-                        }
-                        for(int i =0; i< deliveryMessageList.size();i++)
-                        {
-                         //   Message message = deliveryQueue.poll();
-                          //  if (message.mySequenceNo > deliveryQueue.peek().mySequenceNo) {
-                            Message message = deliveryMessageList.remove(i);
+                        if (setCount == 25) {
+                            Log.i("Inside setcount", "ddf");
+                            Collections.sort(holdbackList, new MessageCompare());
+                            Log.i("Inside setcount-sizeist", String.valueOf( holdbackList.size()));
+                            for (int i = 0; i < holdbackList.size(); i++) {
+                                Message message = holdbackList.get(i);
                                 Log.i("Final----", String.valueOf(actualSequenceNo) + "-" + message.messageText);
                                 content.put("key", String.valueOf(actualSequenceNo++));
                                 content.put("value", message.messageText);
@@ -215,6 +196,8 @@ public class GroupMessengerActivity extends Activity {
                                 Log.i("SERVER-" + Integer.valueOf(processID) * 2, "My largest agreed sequence no -" + myLargestAgreedSeqNo);
                             }
                         }
+
+                    }
                     }
 
 
@@ -243,9 +226,8 @@ public class GroupMessengerActivity extends Activity {
             DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
             double myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
             myProposedSeqNo =  myProposedSeqNo + Double.valueOf(processID)*2/10000;
-
-            holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
-            Log.i("SERVER-"+Integer.valueOf(processID)*2,"Holdback Queue Data at head 1st time- " +  holdBackQueue.peek().messageText);
+            holdbackList.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
+            //holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
            // Log.i("SERVER-"+Integer.valueOf(processID)*2, " My proposed sequence no-" +myProposedSeqNo);
             //Log.i("SERVER-"+Integer.valueOf(processID)*2, "MESSAGE SENDING FROM SERVER" + Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
             outputStream.writeUTF(  Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
