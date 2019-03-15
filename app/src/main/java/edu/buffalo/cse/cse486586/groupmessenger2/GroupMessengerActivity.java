@@ -19,6 +19,7 @@ import java.io.DataOutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.sql.Array;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,6 +30,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
@@ -49,12 +51,12 @@ import java.util.concurrent.locks.ReentrantLock;
 public class GroupMessengerActivity extends Activity {
 
     private class Message
-        {
-        double mySequenceNo;
+    {
+        float mySequenceNo;
         String messageText;
         boolean toBeDelivered;
-        Message(double mySequenceNo, String messageText, boolean toBeDelivered)
-    {
+        Message(float mySequenceNo, String messageText, boolean toBeDelivered)
+        {
             this.mySequenceNo = mySequenceNo;
             this.messageText = messageText;
             this.toBeDelivered = toBeDelivered;
@@ -68,23 +70,20 @@ public class GroupMessengerActivity extends Activity {
     private  static  final Uri CONTENT_URI = Uri.parse("content://edu.buffalo.cse.cse486586.groupmessenger2.provider");
     Socket[] sockets = new Socket[5];
     static int actualSequenceNo=0;
-    static double myLargestAgreedSeqNo =0.0000;
-    static double currentMaxProposedNo=0.00000;
-    SortedMap<Double, String > messageToDeliverList = new TreeMap<Double, String>();
-    Queue<Message> deliveryQueue = new LinkedList<Message>();
-    List<Message> holdbackList =  new ArrayList<Message>();
-    List<Message> deliveryMessageList  = new ArrayList<Message>();
+    static float myLargestAgreedSeqNo =0.0F;
+    static float currentMaxProposedNo=0.0F;
     static int setCount =0;
-    PriorityBlockingQueue<Message> holdBackQueue = new PriorityBlockingQueue<Message>(1000, new MessageCompare());
+    static int failedport =0;
+    List<Message> holdBackQueue = new ArrayList<Message>();
 
-     private class MessageCompare implements Comparator<Message>
-     {
-         @Override
-         public int compare(Message lhs, Message rhs) {
-             if(lhs.mySequenceNo < rhs.mySequenceNo) return 1;
-             else return -1;
-         }
-     }
+    private class MessageCompare implements Comparator<Message>
+    {
+        @Override
+        public int compare(Message lhs, Message rhs) {
+            if(lhs.mySequenceNo < rhs.mySequenceNo) return -1;
+            else return 1;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -148,64 +147,53 @@ public class GroupMessengerActivity extends Activity {
             try {
                 TelephonyManager tel = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
                 String processID = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
-                Log.i("SERVER- " + Integer.valueOf(processID) * 2, " My PROCESS ID-" + processID);
-                Log.i("SERVER-" + Integer.valueOf(processID) * 2, " My PORT NO-" + Integer.valueOf(processID) * 2);
 
                 ServerSocket serverSocket = serverSockets[0];
                 while (true) {
                     Socket socket = serverSocket.accept();
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
                     String messageFromClient = inputStream.readUTF();
-                    Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE RECEIVED FROM CLIENT" + messageFromClient);
 
                     String[] messageFromClientTokens = messageFromClient.split(":");
-                    Log.i("Message length--", String.valueOf(messageFromClientTokens.length));
-
                     if (messageFromClientTokens.length == 3) ManipulateClientMessage(messageFromClientTokens, socket, processID);
                     else {
 
-                        Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE TO BE DELIVERED--" + messageFromClientTokens[0] + " -" + messageFromClientTokens[1]);
-                        Log.i("SERVER-" + Integer.valueOf(processID) * 2, "MESSAGE SENT");
-
-                        myLargestAgreedSeqNo = Double.valueOf(messageFromClientTokens[2]);
+                        myLargestAgreedSeqNo = Math.max(myLargestAgreedSeqNo,Float.valueOf(messageFromClientTokens[2]));
                         ContentValues content = new ContentValues();
 
-                        //while (!deliveryQueue.isEmpty() && deliveryQueue.peek().toBeDelivered == true) {
 
-                        for (int i = 0; i < holdbackList.size(); i++) {
-                            if (holdbackList.get(i).messageText.equals(messageFromClientTokens[1])) {
-                                Message toUpdateMessage = holdbackList.remove(i);
-                                toUpdateMessage.mySequenceNo = Double.valueOf(messageFromClientTokens[2]);
-                                holdbackList.add(toUpdateMessage);
+                        for (int i = 0; i < holdBackQueue.size(); i++) {
+                            if (holdBackQueue.get(i).messageText.equals(messageFromClientTokens[1])) {
+                                Message toUpdateMessage = holdBackQueue.remove(i);
+                                toUpdateMessage.mySequenceNo = Float.valueOf(messageFromClientTokens[2]);
+                                toUpdateMessage.toBeDelivered= true;
+                                holdBackQueue.add(toUpdateMessage);
+                                Collections.sort(holdBackQueue, new MessageCompare());
                                 setCount++;
                                 break;
                             }
 
                         }
-                        if (setCount == 25) {
-                            Log.i("Inside setcount", "ddf");
-                            Collections.sort(holdbackList, new MessageCompare());
-                            Log.i("Inside setcount-sizeist", String.valueOf( holdbackList.size()));
-                            for (int i = 0; i < holdbackList.size(); i++) {
-                                Message message = holdbackList.get(i);
-                                Log.i("Final----", String.valueOf(actualSequenceNo) + "-" + message.messageText);
+                           Collections.sort(holdBackQueue, new MessageCompare());
+                        while(!holdBackQueue.isEmpty()&& holdBackQueue.get(0).toBeDelivered == true)
+                        {
+                                Log.i("Queue",holdBackQueue.get(0).mySequenceNo + "-" + holdBackQueue.get(0).messageText);
+                                Message message = holdBackQueue.remove(0);
                                 content.put("key", String.valueOf(actualSequenceNo++));
                                 content.put("value", message.messageText);
                                 getContentResolver().insert(CONTENT_URI, content);
                                 publishProgress(actualSequenceNo + " -" + message.messageText);
-                                Log.i("SERVER-" + Integer.valueOf(processID) * 2, "My largest agreed sequence no -" + myLargestAgreedSeqNo);
                             }
-                        }
 
                     }
-                    }
-
-
                 }
+
+
+            }
             catch(Exception ex){
-                    ex.printStackTrace();
-                }
-                return null;
+                ex.printStackTrace();
+            }
+            return null;
 
         }
 
@@ -224,24 +212,16 @@ public class GroupMessengerActivity extends Activity {
         try
         {
             DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-            double myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
-            myProposedSeqNo =  myProposedSeqNo + Double.valueOf(processID)*2/10000;
-            holdbackList.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
-            //holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
-           // Log.i("SERVER-"+Integer.valueOf(processID)*2, " My proposed sequence no-" +myProposedSeqNo);
-            //Log.i("SERVER-"+Integer.valueOf(processID)*2, "MESSAGE SENDING FROM SERVER" + Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
+            float myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
+            myProposedSeqNo =  myProposedSeqNo + Float.valueOf(processID)*2/10000;
+            holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
             outputStream.writeUTF(  Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
             outputStream.flush();
-            //Log.i("SERVER-"+Integer.valueOf(processID)*2,"MESSAGE SENT");
             currentMaxProposedNo = myProposedSeqNo;
         }catch(Exception ex)
         {
             ex.printStackTrace();
         }
-
-    }
-
-    private void DeliverClientMessage(String [] messageFromClientTokens, String processID){
 
     }
 
@@ -255,10 +235,12 @@ public class GroupMessengerActivity extends Activity {
 
             try {
                 currentMaxProposedNo = sendingMessageFromClientFirstTime (messageSendingPort,messageText,currentMaxProposedNo);
+                Thread.sleep(500);
                 sendingMessageFromClientToDeliver(messageSendingPort,messageText,currentMaxProposedNo);
+                Thread.sleep(500);
 
+            }
 
-                }
             catch(Exception ex)
             {
                 ex.printStackTrace();
@@ -268,78 +250,83 @@ public class GroupMessengerActivity extends Activity {
         }
     }
 
-    private String getSendingMessage( String sendingPort,  String messageText,double myLargestProposedSeqNo, boolean isFirstTime,String delimeter) {
+    private String getSendingMessage( String sendingPort,  String messageText,float myLargestProposedSeqNo, boolean isFirstTime,String delimeter) {
         if(isFirstTime)
             return sendingPort + delimeter + messageText + delimeter + String.valueOf(myLargestProposedSeqNo);
         else
             return sendingPort + delimeter + messageText + delimeter + String.valueOf(myLargestProposedSeqNo) + delimeter + "deliver";
-            //TODO Think something better to differenciate betwween the initital and to be delivered message
+        //TODO Think something better to differenciate betwween the initital and to be delivered message
 
     }
-    private  double  CalculateCurrentMaxProposedNo(double currentMaxProposedNo,String receivedMessageServer, String delimeter){
+    private  float  CalculateCurrentMaxProposedNo(float currentMaxProposedNo,String receivedMessageServer, String delimeter){
 
-            if (receivedMessageServer != "" && receivedMessageServer != null) {
-                String []receivedMessageServerTokens = receivedMessageServer.split(delimeter);
-                return Math.max(currentMaxProposedNo, Double.valueOf(receivedMessageServerTokens[2]));
+        if (receivedMessageServer != "" && receivedMessageServer != null) {
+            String []receivedMessageServerTokens = receivedMessageServer.split(delimeter);
+            return Math.max(currentMaxProposedNo, Float.valueOf(receivedMessageServerTokens[2]));
 
 
 
-            }
+        }
 
         return -1;
 
 
     }
-    private double sendingMessageFromClientFirstTime(String messageSendingPort, String messageText, double currentMaxProposedNo) throws Exception {
-
-            try {
-                int i = 0;
-                while (i < ports.length) {
-                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(ports[i]));
-                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                    Log.i("Client - " + messageSendingPort, "SENDING MESSAGE TO GET PROPOSALS-" + getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo,true, ":"));
-                    outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, true,":"));
-                    outputStream.flush();
-                    Log.i("Client - " + messageSendingPort, "MESSAGE SENT TO GET PROPOSALS");
-
-                    Log.i("Client-" + messageSendingPort, " RECEIVING THE PROPOSED NO FROM OTHER AVDS");
-
-                    DataInputStream inputStream = new DataInputStream(socket.getInputStream());
-                    String receivedMessageServer = inputStream.readUTF();
-
-                    currentMaxProposedNo = CalculateCurrentMaxProposedNo(currentMaxProposedNo, receivedMessageServer, ":");
-
-                    i++;
-
-                }
-               // Thread.sleep(500);
-                return  currentMaxProposedNo;
-            } catch (Exception ex) {
-                throw ex;
-            }
+    private float sendingMessageFromClientFirstTime(String messageSendingPort, String messageText, float currentMaxProposedNo) throws Exception {
 
 
-
-        }
-    private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, double currentMaxProposedNo) throws Exception {
-        try {
             int i = 0;
             while (i < ports.length) {
+                try {
                 Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(ports[i]));
                 DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                Log.i("Client - " + messageSendingPort, "SENDING MESSAGE TO DELIVER-" + getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, false,":"));
-                outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, false, ":"));
+                outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, true,":"));
                 outputStream.flush();
-                Log.i("Client - " + messageSendingPort, "MESSAGE SENT TO DELIVER");
+
+                DataInputStream inputStream = new DataInputStream(socket.getInputStream());
+                String receivedMessageServer = inputStream.readUTF();
+
+                currentMaxProposedNo = CalculateCurrentMaxProposedNo(currentMaxProposedNo, receivedMessageServer, ":");
+
                 i++;
 
             }
-           // Thread.sleep(500);
-        } catch (Exception ex) {
-            throw ex;
+            catch (SocketException se) {
+                    Log.i("Inside","Exception");
+                    Log.i("Exception-----","**********" + ports[i]);
+
+
+            }
+            catch (Exception ex) {
+                    throw ex;
+                }
         }
+        return  currentMaxProposedNo;
+
+    }
+    private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, float currentMaxProposedNo) throws Exception {
+
+            int i = 0;
+            while (i < ports.length) {
+                try {
+                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(ports[i]));
+                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                    outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, false, ":"));
+                    outputStream.flush();
+                    i++;
+                }
+                catch (SocketException se) {
+                    Log.i("Inside","Exception");
+                    Log.i("Exception-----","**********" + ports[i]);
+                }
+                catch (Exception ex) {
+                        throw ex;
+                    }
+            }
+
+
 
     }
 
