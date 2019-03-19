@@ -56,6 +56,7 @@ public class GroupMessengerActivity extends Activity {
         String messageText;
         boolean toBeDelivered;
         String mesageSendingPort;
+
         Message(float mySequenceNo, String messageText, boolean toBeDelivered, String mesageSendingPort)
         {
             this.mesageSendingPort = mesageSendingPort;
@@ -75,7 +76,8 @@ public class GroupMessengerActivity extends Activity {
     static float myLargestAgreedSeqNo =0.0F;
     static float currentMaxProposedNo=0.0F;
     static int setCount =0;
-    static String failedport;
+    static String failedport="";
+    static int counter =0;
     boolean isAlreadyRemoved =false;
     List<Message> holdBackQueue = new ArrayList<Message>();
 
@@ -84,7 +86,8 @@ public class GroupMessengerActivity extends Activity {
         @Override
         public int compare(Message lhs, Message rhs) {
             if(lhs.mySequenceNo < rhs.mySequenceNo) return -1;
-            else return 1;
+            else if (lhs.mySequenceNo >rhs.mySequenceNo) return 1;
+            else return 0;
         }
     }
 
@@ -162,9 +165,6 @@ public class GroupMessengerActivity extends Activity {
                     String[] messageFromClientTokens = messageFromClient.split(":");
                     if (messageFromClientTokens.length == 3) ManipulateClientMessage(messageFromClientTokens, socket, processID);
                     else if (messageFromClientTokens.length == 4){
-
-                        Log.e("Message Text", messageFromClientTokens[1]);
-
                         myLargestAgreedSeqNo = Math.max(myLargestAgreedSeqNo,Float.valueOf(messageFromClientTokens[2]));
                         ContentValues content = new ContentValues();
 
@@ -174,20 +174,33 @@ public class GroupMessengerActivity extends Activity {
                                 Message toUpdateMessage = holdBackQueue.remove(i);
                                 toUpdateMessage.mySequenceNo = Float.valueOf(messageFromClientTokens[2]);
                                 toUpdateMessage.toBeDelivered= true;
+                                toUpdateMessage.mesageSendingPort = messageFromClientTokens[0];
                                 holdBackQueue.add(toUpdateMessage);
                                 Collections.sort(holdBackQueue, new MessageCompare());
+                                currentMaxProposedNo = currentMaxProposedNo >  Float.valueOf(messageFromClientTokens[2])?currentMaxProposedNo:Float.valueOf(messageFromClientTokens[2]);
                                 setCount++;
                                 break;
                             }
 
                         }
                         Collections.sort(holdBackQueue, new MessageCompare());
-                        if(!holdBackQueue.isEmpty()&& holdBackQueue.get(0).toBeDelivered == false && holdBackQueue.get(0).mesageSendingPort == failedport);
+                        if(failedport!= null || !failedport.equals(""))
                         {
-                            Log.e("Message", holdBackQueue.get(0).mesageSendingPort +"-" + holdBackQueue.get(0).messageText);
-                            Log.e("Error","Error");
-                        }
 
+                            Log.e("Failed port not null", failedport);
+                            while(!holdBackQueue.isEmpty() && holdBackQueue.get(0).toBeDelivered ==false && holdBackQueue.get(0).mesageSendingPort.equals(failedport))
+                            {
+                                Log.i("Checking queue-", String.valueOf(holdBackQueue.size()));
+                                {
+                                    Log.e("Queue head deliver-", String.valueOf(holdBackQueue.get(0).toBeDelivered));
+                                    Log.e("Removing from port", holdBackQueue.get(0).mesageSendingPort);
+
+                                    holdBackQueue.remove(0);
+
+                                }
+                            }
+                            Collections.sort(holdBackQueue, new MessageCompare());
+                        }
                         while(!holdBackQueue.isEmpty()&& holdBackQueue.get(0).toBeDelivered == true)
                         {
                             Log.i("Queue",holdBackQueue.get(0).mySequenceNo + "-" + holdBackQueue.get(0).messageText);
@@ -197,6 +210,8 @@ public class GroupMessengerActivity extends Activity {
                             getContentResolver().insert(CONTENT_URI, content);
                             publishProgress(actualSequenceNo + " -" + message.messageText);
                         }
+
+
 
                     }
                     else
@@ -230,7 +245,7 @@ public class GroupMessengerActivity extends Activity {
         try
         {
             DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-            float myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
+            float myProposedSeqNo = 1 +currentMaxProposedNo;
             myProposedSeqNo =  myProposedSeqNo + Float.valueOf(processID)*2/10000;
             holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false,messageFromClientTokens[0] ));
             outputStream.writeUTF(  Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
@@ -252,10 +267,11 @@ public class GroupMessengerActivity extends Activity {
 
 
             try {
-                Log.i("Message after exception", messageSendingPort);
-                currentMaxProposedNo = sendingMessageFromClientFirstTime (messageSendingPort,messageText,currentMaxProposedNo);
+
+                float max = sendingMessageFromClientFirstTime (messageSendingPort,messageText,++counter);
+                Log.i("CurrentMaxnumber", String.valueOf(currentMaxProposedNo));
                 Thread.sleep(500);
-                sendingMessageFromClientToDeliver(messageSendingPort,messageText,currentMaxProposedNo);
+                sendingMessageFromClientToDeliver(messageSendingPort,messageText, max);
                 Thread.sleep(500);
 
             }
@@ -293,6 +309,8 @@ public class GroupMessengerActivity extends Activity {
     }
     private void removeAllFailedMesages(String failedPort)
     {
+        Log.e("removing failed message","removing falied messages");
+        Log.e("Size of queue", String.valueOf(holdBackQueue.size()));
         List<Message> d = new ArrayList<Message>();
         for(int i=0;i< holdBackQueue.size();i++)
         {
