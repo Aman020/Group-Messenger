@@ -55,8 +55,10 @@ public class GroupMessengerActivity extends Activity {
         float mySequenceNo;
         String messageText;
         boolean toBeDelivered;
-        Message(float mySequenceNo, String messageText, boolean toBeDelivered)
+        String mesageSendingPort;
+        Message(float mySequenceNo, String messageText, boolean toBeDelivered, String mesageSendingPort)
         {
+            this.mesageSendingPort = mesageSendingPort;
             this.mySequenceNo = mySequenceNo;
             this.messageText = messageText;
             this.toBeDelivered = toBeDelivered;
@@ -73,7 +75,8 @@ public class GroupMessengerActivity extends Activity {
     static float myLargestAgreedSeqNo =0.0F;
     static float currentMaxProposedNo=0.0F;
     static int setCount =0;
-    static int failedport =0;
+    static String failedport;
+    boolean isAlreadyRemoved =false;
     List<Message> holdBackQueue = new ArrayList<Message>();
 
     private class MessageCompare implements Comparator<Message>
@@ -154,9 +157,13 @@ public class GroupMessengerActivity extends Activity {
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
                     String messageFromClient = inputStream.readUTF();
 
+
+
                     String[] messageFromClientTokens = messageFromClient.split(":");
                     if (messageFromClientTokens.length == 3) ManipulateClientMessage(messageFromClientTokens, socket, processID);
-                    else {
+                    else if (messageFromClientTokens.length == 4){
+
+                        Log.e("Message Text", messageFromClientTokens[1]);
 
                         myLargestAgreedSeqNo = Math.max(myLargestAgreedSeqNo,Float.valueOf(messageFromClientTokens[2]));
                         ContentValues content = new ContentValues();
@@ -174,16 +181,27 @@ public class GroupMessengerActivity extends Activity {
                             }
 
                         }
-                           Collections.sort(holdBackQueue, new MessageCompare());
+                        Collections.sort(holdBackQueue, new MessageCompare());
+                        if(!holdBackQueue.isEmpty()&& holdBackQueue.get(0).toBeDelivered == false && holdBackQueue.get(0).mesageSendingPort == failedport);
+                        {
+                            Log.e("Message", holdBackQueue.get(0).mesageSendingPort +"-" + holdBackQueue.get(0).messageText);
+                            Log.e("Error","Error");
+                        }
+
                         while(!holdBackQueue.isEmpty()&& holdBackQueue.get(0).toBeDelivered == true)
                         {
-                                Log.i("Queue",holdBackQueue.get(0).mySequenceNo + "-" + holdBackQueue.get(0).messageText);
-                                Message message = holdBackQueue.remove(0);
-                                content.put("key", String.valueOf(actualSequenceNo++));
-                                content.put("value", message.messageText);
-                                getContentResolver().insert(CONTENT_URI, content);
-                                publishProgress(actualSequenceNo + " -" + message.messageText);
-                            }
+                            Log.i("Queue",holdBackQueue.get(0).mySequenceNo + "-" + holdBackQueue.get(0).messageText);
+                            Message message = holdBackQueue.remove(0);
+                            content.put("key", String.valueOf(actualSequenceNo++));
+                            content.put("value", message.messageText);
+                            getContentResolver().insert(CONTENT_URI, content);
+                            publishProgress(actualSequenceNo + " -" + message.messageText);
+                        }
+
+                    }
+                    else
+                    {
+                        throw new IllegalStateException("unexoected");
 
                     }
                 }
@@ -214,7 +232,7 @@ public class GroupMessengerActivity extends Activity {
             DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
             float myProposedSeqNo = 1 + Math.max(currentMaxProposedNo, myLargestAgreedSeqNo);
             myProposedSeqNo =  myProposedSeqNo + Float.valueOf(processID)*2/10000;
-            holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false));
+            holdBackQueue.add(new Message(myProposedSeqNo,messageFromClientTokens[1],false,messageFromClientTokens[0] ));
             outputStream.writeUTF(  Integer.valueOf(processID) * 2 + ":" + messageFromClientTokens[1] + ":" + myProposedSeqNo);
             outputStream.flush();
             currentMaxProposedNo = myProposedSeqNo;
@@ -234,6 +252,7 @@ public class GroupMessengerActivity extends Activity {
 
 
             try {
+                Log.i("Message after exception", messageSendingPort);
                 currentMaxProposedNo = sendingMessageFromClientFirstTime (messageSendingPort,messageText,currentMaxProposedNo);
                 Thread.sleep(500);
                 sendingMessageFromClientToDeliver(messageSendingPort,messageText,currentMaxProposedNo);
@@ -272,43 +291,64 @@ public class GroupMessengerActivity extends Activity {
 
 
     }
-    private float sendingMessageFromClientFirstTime(String messageSendingPort, String messageText, float currentMaxProposedNo) throws Exception {
-
-
-            int i = 0;
-            while (i < ports.length) {
-                try {
-                Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                        Integer.parseInt(ports[i]));
-                DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
-                outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, true,":"));
-                outputStream.flush();
-
-                DataInputStream inputStream = new DataInputStream(socket.getInputStream());
-                String receivedMessageServer = inputStream.readUTF();
-
-                currentMaxProposedNo = CalculateCurrentMaxProposedNo(currentMaxProposedNo, receivedMessageServer, ":");
-
-                i++;
-
+    private void removeAllFailedMesages(String failedPort)
+    {
+        List<Message> d = new ArrayList<Message>();
+        for(int i=0;i< holdBackQueue.size();i++)
+        {
+            if(holdBackQueue.get(i).mesageSendingPort.equals(failedPort) && holdBackQueue.get(i).toBeDelivered == false)
+            {
+                d.add(holdBackQueue.get(i));
             }
-            catch (SocketException se) {
-                    Log.i("Inside","Exception");
-                    Log.i("Exception-----","**********" + ports[i]);
+        }
+        for (Message m: d) {
+            holdBackQueue.remove(m);
+        }
+
+    }
+    private float sendingMessageFromClientFirstTime(String messageSendingPort, String messageText, float currentMaxProposedNo) {
 
 
-            }
-            catch (Exception ex) {
-                    throw ex;
+        int i = 0;
+        while (i < ports.length) {
+            try {
+                if( ports[i].equals(failedport))
+                {i++;}
+                else {
+                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(ports[i]));
+                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                    outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, true, ":"));
+                    outputStream.flush();
+
+                    DataInputStream inputStream = new DataInputStream(socket.getInputStream());
+                    String receivedMessageServer = inputStream.readUTF();
+
+                    currentMaxProposedNo = CalculateCurrentMaxProposedNo(currentMaxProposedNo, receivedMessageServer, ":");
+
+                    i++;
                 }
+            }
+
+            catch (Exception ex) {
+                Log.i("Inside","Exception");
+                Log.i("Exception-----","**********" + ports[i]);
+                failedport = ports[i];
+
+                ex.printStackTrace();
+
+                removeAllFailedMesages(failedport);
+            }
         }
         return  currentMaxProposedNo;
 
     }
     private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, float currentMaxProposedNo) throws Exception {
 
-            int i = 0;
-            while (i < ports.length) {
+        int i = 0;
+        while (i < ports.length) {
+            if (ports[i].equals(failedport)){ i++;}
+           else {
                 try {
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(ports[i]));
@@ -317,14 +357,17 @@ public class GroupMessengerActivity extends Activity {
                     outputStream.flush();
                     i++;
                 }
-                catch (SocketException se) {
-                    Log.i("Inside","Exception");
-                    Log.i("Exception-----","**********" + ports[i]);
+                 catch (Exception ex) {
+                    ex.printStackTrace();
+                     Log.i("Inside", "Exception");
+                     Log.i("Exception-----", "**********" + ports[i]);
+                     failedport = ports[i];
+
+                     removeAllFailedMesages(failedport);
+
                 }
-                catch (Exception ex) {
-                        throw ex;
-                    }
             }
+        }
 
 
 

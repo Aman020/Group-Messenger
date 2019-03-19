@@ -56,7 +56,7 @@ public class GroupMessengerProvider extends ContentProvider {
          * internal storage option that we used in PA1. If you want to use that option, please
          * take a look at the code for PA1.
          */
-        Log.i("Insert-", "Calling the insertInInternalStorage function");
+        //Log.i("Insert-", "Calling the insertInInternalStorage function");
         uri= insertInInternalStorage(uri, values, getContext());
         Log.v("insert", values.toString());
         return uri;
