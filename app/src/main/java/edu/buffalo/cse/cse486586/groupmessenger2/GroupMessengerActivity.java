@@ -104,6 +104,7 @@ public class GroupMessengerActivity extends Activity {
 
         TelephonyManager tel = (TelephonyManager) this.getSystemService(Context.TELEPHONY_SERVICE);
         final String processId = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
+        Log.e("*********","****MY PORT ID*****----"+ Integer.parseInt(processId)*2);
 
         TextView tv = (TextView) findViewById(R.id.textView1);
         tv.setMovementMethod(new ScrollingMovementMethod());
@@ -165,10 +166,15 @@ public class GroupMessengerActivity extends Activity {
                     Socket socket = serverSocket.accept();
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
                     String messageFromClient = inputStream.readUTF();
-
-
-
                     String[] messageFromClientTokens = messageFromClient.split(":");
+
+                    if(!failedport.equals(""))
+                    {
+
+                        Log.e("Failed port not null", failedport);
+                        removeAllFailedMesages(failedport);
+                    }
+
                     if (messageFromClientTokens.length == 3) ManipulateClientMessage(messageFromClientTokens, socket, processID);
                     else if (messageFromClientTokens.length == 4){
                         myLargestAgreedSeqNo = Math.max(myLargestAgreedSeqNo,Float.valueOf(messageFromClientTokens[2]));
@@ -189,24 +195,7 @@ public class GroupMessengerActivity extends Activity {
                             }
 
                         }
-                        Collections.sort(holdBackQueue, new MessageCompare());
-                        if(failedport!= null || !failedport.equals(""))
-                        {
 
-                            Log.e("Failed port not null", failedport);
-                            while(!holdBackQueue.isEmpty() && holdBackQueue.get(0).toBeDelivered ==false && holdBackQueue.get(0).mesageSendingPort.equals(failedport))
-                            {
-                                Log.i("Checking queue-", String.valueOf(holdBackQueue.size()));
-                                {
-                                    Log.e("Queue head deliver-", String.valueOf(holdBackQueue.get(0).toBeDelivered));
-                                    Log.e("Removing from port", holdBackQueue.get(0).mesageSendingPort);
-
-                                    holdBackQueue.remove(0);
-
-                                }
-                            }
-                            Collections.sort(holdBackQueue, new MessageCompare());
-                        }
                         while(!holdBackQueue.isEmpty()&& holdBackQueue.get(0).toBeDelivered == true)
                         {
                             Log.i("Queue",holdBackQueue.get(0).mySequenceNo + "-" + holdBackQueue.get(0).messageText);
@@ -320,12 +309,14 @@ public class GroupMessengerActivity extends Activity {
         List<Message> d = new ArrayList<Message>();
         for(int i=0;i< holdBackQueue.size();i++)
         {
-            if(holdBackQueue.get(i).mesageSendingPort.equals(failedPort) && holdBackQueue.get(i).toBeDelivered == false)
+            if(holdBackQueue.get(i).mesageSendingPort.equals(failedPort))
             {
+                Log.e("Added--", holdBackQueue.get(i).mesageSendingPort + "-" + holdBackQueue.get(i).messageText + "-" +holdBackQueue.get(i).toBeDelivered);
                 d.add(holdBackQueue.get(i));
             }
         }
         for (Message m: d) {
+            Log.e("Removing--", m.mesageSendingPort + "-" + m.messageText + "-" + m.toBeDelivered);
             holdBackQueue.remove(m);
         }
 
@@ -344,29 +335,23 @@ public class GroupMessengerActivity extends Activity {
                     DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
                     outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, true, ":"));
                     outputStream.flush();
-
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
                     String receivedMessageServer = inputStream.readUTF();
-
                     currentMaxProposedNo = CalculateCurrentMaxProposedNo(currentMaxProposedNo, receivedMessageServer, ":");
-
                     i++;
                 }
             }
-
             catch (Exception ex) {
                 Log.i("Inside","Exception");
                 Log.i("Exception-----","**********" + ports[i]);
                 failedport = ports[i];
-
                 ex.printStackTrace();
-
-                removeAllFailedMesages(failedport);
             }
         }
         return  currentMaxProposedNo;
 
     }
+
     private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, float currentMaxProposedNo) throws Exception {
 
         int i = 0;
@@ -386,9 +371,6 @@ public class GroupMessengerActivity extends Activity {
                     Log.i("Inside", "Exception");
                     Log.i("Exception-----", "**********" + ports[i]);
                     failedport = ports[i];
-
-                    removeAllFailedMesages(failedport);
-
                 }
             }
         }
