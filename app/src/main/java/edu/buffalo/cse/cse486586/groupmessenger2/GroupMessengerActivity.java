@@ -332,6 +332,7 @@ public class GroupMessengerActivity extends Activity {
                 else {
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(ports[i]));
+                    socket.setSoTimeout(1000);
                     DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
                     outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, true, ":"));
                     outputStream.flush();
@@ -361,6 +362,7 @@ public class GroupMessengerActivity extends Activity {
                 try {
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(ports[i]));
+                    socket.setSoTimeout(1000);
                     DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
                     outputStream.writeUTF(getSendingMessage(messageSendingPort, messageText, currentMaxProposedNo, false, ":"));
                     outputStream.flush();
