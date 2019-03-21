@@ -88,7 +88,7 @@ $ adb uninstall edu.buffalo.cse.cse486586.groupmessenger2
 ```
 ## General Notes
 
-```
+
 * Please do not use a separate timer to handle failures. This will make debugging very difficult. Use socket timeouts and handle all possible exceptions that get thrown when there is a failure. They are:
 * SocketTimeoutException, StreamCorruptedException, IOException, FileException, and EOFException.
 * Please use full duplex TCP for both sending and receiving. This means that there is no need to create a new connection every time you send a message. If you’re sending and receiving multiple messages from a remote AVD, then you can keep using the same socket. This makes it easier.
@@ -99,14 +99,12 @@ that need to be sent and received. The message size overhead is unnecessarily la
 * There is a cap on the number of AsyncTasks that can run at the same time, even when you use THREAD_POOL_EXECUTOR.
 * The limit is "roughly" 5. Thus, if you need to create more than 5 AsyncTasks (roughly, once again), 
 then you will have to use something else like Thread. However, I really do not think that it is necessary to create that many AsyncTasks for the PAs in this course. Thus, if your code doesn't work because you hit the AsyncTask limit, then please think hard why you're creating that many threads in the first place.
-```
+
 *(http://developer.android.com/reference/java/util/concurrent/ThreadPoolExecutor.html)
-```
 (Read "Core and maximum pool sizes.")
 * For Windows users: In the past, it was discovered that sometimes you cannot run a grader and Android Studio at the same time. As far as I know, this happens rarely, but there is no guarantee that you will not encounter this issue. Thus, if you think that a grader is not running properly and you don't know why,
 first try closing Android Studio and run the grader.
 
-```
 ## Running the code
 
 1. Import the project in Android Studio and build the apk file.
