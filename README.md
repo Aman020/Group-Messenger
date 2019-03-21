@@ -116,11 +116,15 @@ first try closing Android Studio and run the grader.
 6. The grader has many options you can use for your testing. It allows you to choose which phase to test and for phase 2, how many times to run. It also has an option to print out verbose output, which can be helpful for debugging. You can enter the following command to see the options:
 $ <grader executable> -h
 
-## Credits
+### Credits
 
 This project contains scripts and other related material that is developed at University of Buffalo, The State University of New York.
 
-## References
+### References
 
+[Design Documnet](https://docs.google.com/document/d/1xgXwZ6GYA152WT3K0B1MPP7F0mf0sPCPzfqr528pO5Y/edit#) <br/>
+[Lecture Slides](https://cse.buffalo.edu/~stevko/courses/cse486/spring19/lectures/11-multicast1.pdf)
 
-[Design Documnet](https://docs.google.com/document/d/1xgXwZ6GYA152WT3K0B1MPP7F0mf0sPCPzfqr528pO5Y/edit#)
+### Acknowledgement
+
+I would like to thank my Professor, [Steve Ko](https://nsr.cse.buffalo.edu/?page_id=272), for the  guidance, encouragement and advice he has provided throughout. I am also thankful to all the TA's who have clarified all my queries.
