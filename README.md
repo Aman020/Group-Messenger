@@ -108,7 +108,7 @@ first try closing Android Studio and run the grader.
 ## Running the code
 
 1. Import the project in Android Studio and build the apk file.
-2. Download the testing scripts from [here] (https://github.com/Aman020/Group-Messenger/tree/master/Testing%20Scripts)
+2. Download the testing scripts from [here](https://github.com/Aman020/Group-Messenger/tree/master/Testing%20Scripts)
 
 3. Before you run the program, please make sure that you are running five AVDs. The below command will do it: - - python run_avd.py 5
 4. Also make sure that the Emulator Networking setup is done. The below command will do it: - - python set_redir.py 10000
