@@ -88,7 +88,7 @@ $ adb uninstall edu.buffalo.cse.cse486586.groupmessenger2
 ```
 ## General Notes
 
-```
+
 * Please do not use a separate timer to handle failures. This will make debugging very difficult. Use socket timeouts and handle all possible exceptions that get thrown when there is a failure. They are:
 * SocketTimeoutException, StreamCorruptedException, IOException, FileException, and EOFException.
 * Please use full duplex TCP for both sending and receiving. This means that there is no need to create a new connection every time you send a message. If you’re sending and receiving multiple messages from a remote AVD, then you can keep using the same socket. This makes it easier.
@@ -99,22 +99,32 @@ that need to be sent and received. The message size overhead is unnecessarily la
 * There is a cap on the number of AsyncTasks that can run at the same time, even when you use THREAD_POOL_EXECUTOR.
 * The limit is "roughly" 5. Thus, if you need to create more than 5 AsyncTasks (roughly, once again), 
 then you will have to use something else like Thread. However, I really do not think that it is necessary to create that many AsyncTasks for the PAs in this course. Thus, if your code doesn't work because you hit the AsyncTask limit, then please think hard why you're creating that many threads in the first place.
-* http://developer.android.com/reference/java/util/concurrent/ThreadPoolExecutor.html
+
+*(http://developer.android.com/reference/java/util/concurrent/ThreadPoolExecutor.html)
 (Read "Core and maximum pool sizes.")
 * For Windows users: In the past, it was discovered that sometimes you cannot run a grader and Android Studio at the same time. As far as I know, this happens rarely, but there is no guarantee that you will not encounter this issue. Thus, if you think that a grader is not running properly and you don't know why,
 first try closing Android Studio and run the grader.
 
-```
 ## Running the code
-```
+
 1. Import the project in Android Studio and build the apk file.
-2. Download the testing scripts from here
+2. Download the testing scripts from [here](https://github.com/Aman020/Group-Messenger/tree/master/Testing%20Scripts)
+
 3. Before you run the program, please make sure that you are running five AVDs. The below command will do it: - - python run_avd.py 5
 4. Also make sure that the Emulator Networking setup is done. The below command will do it: - - python set_redir.py 10000
 5. Run the grader: - - $ chmod +x < grader executable> - $ ./< grader executable> apk file path
 6. The grader has many options you can use for your testing. It allows you to choose which phase to test and for phase 2, how many times to run. It also has an option to print out verbose output, which can be helpful for debugging. You can enter the following command to see the options:
 $ <grader executable> -h
-```
+
 ### Credits
 
 This project contains scripts and other related material that is developed at University of Buffalo, The State University of New York.
+
+### References
+
+[Design Documnet](https://docs.google.com/document/d/1xgXwZ6GYA152WT3K0B1MPP7F0mf0sPCPzfqr528pO5Y/edit#) <br/>
+[Lecture Slides](https://cse.buffalo.edu/~stevko/courses/cse486/spring19/lectures/11-multicast1.pdf)
+
+### Acknowledgement
+
+I would like to thank my Professor, [Steve Ko](https://nsr.cse.buffalo.edu/?page_id=272), for the  guidance, encouragement and advice he has provided throughout. I am also thankful to all the TA's who have clarified all my queries.
