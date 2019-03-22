@@ -118,7 +118,6 @@ public class GroupMessengerProvider extends ContentProvider {
          * http://developer.android.com/reference/android/database/MatrixCursor.html
          */
         try {
-            Thread.sleep(500);
             Log.i("Query-", "Calling the getQueryResult()");
             Cursor returnResult = getQueryResult(uri, selection, getContext());
             Log.v("query", selection);
