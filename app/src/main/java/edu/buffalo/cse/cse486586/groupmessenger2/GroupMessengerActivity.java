@@ -179,7 +179,7 @@ public class GroupMessengerActivity extends Activity {
 //                        removeAllFailedMesages(failedport);
 //                    }
                     if (messageFromClientTokens.length == 3){ ManipulateClientMessage(messageFromClientTokens, socket, processID);
-                    Log.i("Current queue size",String.valueOf(holdBackQueue.size()));}
+                        Log.i("Current queue size",String.valueOf(holdBackQueue.size()));}
 
 
                     else if (messageFromClientTokens.length == 4){
@@ -235,7 +235,7 @@ public class GroupMessengerActivity extends Activity {
                     }
                     else
                     {
-                        throw new IllegalStateException("unexoected");
+                       removeAllFailedMesages(failedport);
 
                     }
                 }
@@ -289,7 +289,7 @@ public class GroupMessengerActivity extends Activity {
 
                 float max = sendingMessageFromClientFirstTime (messageSendingPort,messageText,++counter);
                 Log.i("CurrentMaxnumber", String.valueOf(currentMaxProposedNo));
-               // Thread.sleep(500);
+                // Thread.sleep(500);
                 Log.i("Client at" + messageSendingPort,"Now Delivering message across all avds-" + messageText);
                 sendingMessageFromClientToDeliver(messageSendingPort,messageText, max);
                 Thread.sleep(500);
@@ -353,7 +353,9 @@ public class GroupMessengerActivity extends Activity {
         while (i < ports.length) {
             try {
                 if( ports[i].equals(String.valueOf(atomicFailedPort.get())))
-                {i++;}
+                {
+                    i++;
+                }
                 else {
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(ports[i]));
@@ -373,12 +375,12 @@ public class GroupMessengerActivity extends Activity {
                 //failedport = ports[i];
                 atomicFailedPort.set(Integer.parseInt(ports[i]));
                 ex.printStackTrace();
+
             }
         }
         return  currentMaxProposedNo;
 
     }
-
     private void sendingMessageFromClientToDeliver(String messageSendingPort, String messageText, float currentMaxProposedNo) throws Exception {
 
         int i = 0;
@@ -408,6 +410,7 @@ public class GroupMessengerActivity extends Activity {
                     Log.i("Exception-----", "**********" + ports[i]);
                     //failedport = ports[i];
                     atomicFailedPort.set(Integer.parseInt(ports[i]));
+
                 }
             }
         }
