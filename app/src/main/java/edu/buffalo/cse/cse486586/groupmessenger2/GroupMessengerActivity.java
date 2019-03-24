@@ -188,7 +188,7 @@ public class GroupMessengerActivity extends Activity {
                         outputStream.writeUTF("Acknowledge:" + Integer.parseInt(processID)*2);
 
                         myLargestAgreedSeqNo = Math.max(myLargestAgreedSeqNo,Float.valueOf(messageFromClientTokens[2]));
-                        ContentValues content = new ContentValues();
+
 
 
                         for (int i = 0; i < holdBackQueue.size(); i++) {
@@ -206,36 +206,16 @@ public class GroupMessengerActivity extends Activity {
 
                         }
                         Log.i("queue Justb4 deliver",String.valueOf(holdBackQueue.size()));
-                        if(!holdBackQueue.isEmpty() ) {
-                            if( atomicFailedPort.get() != -1)
-                            {
-                                Log.e("Failed port detected ",String.valueOf(atomicFailedPort.get()));
-                                removeAllFailedMesages(String.valueOf(atomicFailedPort.get()));
-
-
-                            }
-                            while (!holdBackQueue.isEmpty() && holdBackQueue.get(0).toBeDelivered == true) {
-                                Log.i("Queue", holdBackQueue.get(0).mySequenceNo + "-" + holdBackQueue.get(0).messageText + " Message sending port-" + holdBackQueue.get(0).mesageSendingPort);
-                                Message message = holdBackQueue.remove(0);
-                                content.put("key", String.valueOf(actualSequenceNo++));
-                                content.put("value", message.messageText);
-                                getContentResolver().insert(CONTENT_URI, content);
-                                publishProgress(actualSequenceNo + " -" + message.messageText + "-" + message.mesageSendingPort);
-                                if (!holdBackQueue.isEmpty()) {
-                                    Log.i("Queue Size Now", String.valueOf(holdBackQueue.size()));
-                                    Log.i("Queue head ", holdBackQueue.get(0).messageText + "  sending port-" + holdBackQueue.get(0).mesageSendingPort + "-" + holdBackQueue.get(0).toBeDelivered);
-                                } else {
-                                    Log.i("Queue Empty", String.valueOf(holdBackQueue.size()));
-                                }
-
-                            }
-                        }
+                        insertMessagesInQueue();
 
 
                     }
                     else
                     {
-                       removeAllFailedMesages(failedport);
+                        Log.e("Server", "I got to know the failed port");
+
+                       removeAllFailedMesages(messageFromClientTokens[1]);
+                       insertMessagesInQueue();
 
                     }
                 }
@@ -247,6 +227,37 @@ public class GroupMessengerActivity extends Activity {
             }
             return null;
 
+        }
+
+// This function is just a hack to handle 1 scenario where one of the avds was not able to catch the exception if it has deliverd all its messages.
+// This is because the client task of this avd would not run and hence its failed port variable would not be set
+        private void insertMessagesInQueue()
+        {
+            ContentValues content = new ContentValues();
+            if(!holdBackQueue.isEmpty() ) {
+                if( atomicFailedPort.get() != -1)
+                {
+                    Log.e("Failed port detected ",String.valueOf(atomicFailedPort.get()));
+                    removeAllFailedMesages(String.valueOf(atomicFailedPort.get()));
+
+
+                }
+                while (!holdBackQueue.isEmpty() && holdBackQueue.get(0).toBeDelivered == true) {
+                    Log.i("Queue", holdBackQueue.get(0).mySequenceNo + "-" + holdBackQueue.get(0).messageText + " Message sending port-" + holdBackQueue.get(0).mesageSendingPort);
+                    Message message = holdBackQueue.remove(0);
+                    content.put("key", String.valueOf(actualSequenceNo++));
+                    content.put("value", message.messageText);
+                    getContentResolver().insert(CONTENT_URI, content);
+                    publishProgress(actualSequenceNo + " -" + message.messageText + "-" + message.mesageSendingPort);
+                    if (!holdBackQueue.isEmpty()) {
+                        Log.i("Queue Size Now", String.valueOf(holdBackQueue.size()));
+                        Log.i("Queue head ", holdBackQueue.get(0).messageText + "  sending port-" + holdBackQueue.get(0).mesageSendingPort + "-" + holdBackQueue.get(0).toBeDelivered);
+                    } else {
+                        Log.i("Queue Empty", String.valueOf(holdBackQueue.size()));
+                    }
+
+                }
+            }
         }
 
         protected void onProgressUpdate(String... values) {
@@ -327,6 +338,41 @@ public class GroupMessengerActivity extends Activity {
 
 
     }
+
+
+    private void InformPreviousPorts(int currentPortIndex, String failedPort)
+    {
+        int j =0;
+        while(j <=currentPortIndex)
+        {
+            if( ports[j].equals(String.valueOf(atomicFailedPort.get())))
+            {
+                j++;
+            }
+            else
+            {
+                try
+                {
+                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(ports[j]));
+                    socket.setSoTimeout(2000);
+                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                    outputStream.writeUTF("Failed:"+ failedPort);
+                    outputStream.flush();
+                j++;
+                }
+                catch(Exception e)
+                {
+                    e.printStackTrace();
+                }
+            }
+
+        }
+    }
+
+
+
+
     private void removeAllFailedMesages(String failedPort)
     {
         Log.e("removing failed message","removing falied messages");
@@ -369,11 +415,15 @@ public class GroupMessengerActivity extends Activity {
                     i++;
                 }
             }
+
             catch (Exception ex) {
                 Log.i("Inside","Exception caught while getting proposal number");
                 Log.i("Exception-----","**********" + ports[i]);
                 //failedport = ports[i];
                 atomicFailedPort.set(Integer.parseInt(ports[i]));
+                InformPreviousPorts(i,String.valueOf(atomicFailedPort.get()));
+
+
                 ex.printStackTrace();
 
             }
@@ -410,6 +460,10 @@ public class GroupMessengerActivity extends Activity {
                     Log.i("Exception-----", "**********" + ports[i]);
                     //failedport = ports[i];
                     atomicFailedPort.set(Integer.parseInt(ports[i]));
+                    InformPreviousPorts(i,String.valueOf(atomicFailedPort.get()));
+
+
+
 
                 }
             }
