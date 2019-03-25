@@ -228,10 +228,7 @@ public class GroupMessengerActivity extends Activity {
             return null;
 
         }
-
-// This function is just a hack to handle 1 scenario where one of the avds was not able to catch the exception if it has deliverd all its messages.
-// This is because the client task of this avd would not run and hence its failed port variable would not be set
-        private void insertMessagesInQueue()
+     private void insertMessagesInQueue()
         {
             ContentValues content = new ContentValues();
             if(!holdBackQueue.isEmpty() ) {
@@ -340,12 +337,15 @@ public class GroupMessengerActivity extends Activity {
     }
 
 
-    private void InformPreviousPorts(int currentPortIndex, String failedPort)
+// This function is just a hack to handle 1 scenario where one of the avds was not able to catch the exception if it has deliverd all its messages.
+// This is because the client task of this avd would not run and hence its failed port variable would not be set
+
+    private void InformAllPorts(String myPort, String failedPort)
     {
         int j =0;
-        while(j <=currentPortIndex)
+        while(j <ports.length)
         {
-            if( ports[j].equals(String.valueOf(atomicFailedPort.get())))
+            if( ports[j].equals(myPort)|| ports[j].equals(String.valueOf(atomicFailedPort.get())))
             {
                 j++;
             }
@@ -421,7 +421,7 @@ public class GroupMessengerActivity extends Activity {
                 Log.i("Exception-----","**********" + ports[i]);
                 //failedport = ports[i];
                 atomicFailedPort.set(Integer.parseInt(ports[i]));
-                InformPreviousPorts(i,String.valueOf(atomicFailedPort.get()));
+                InformAllPorts(messageSendingPort,String.valueOf(atomicFailedPort.get()));
 
 
                 ex.printStackTrace();
@@ -460,7 +460,7 @@ public class GroupMessengerActivity extends Activity {
                     Log.i("Exception-----", "**********" + ports[i]);
                     //failedport = ports[i];
                     atomicFailedPort.set(Integer.parseInt(ports[i]));
-                    InformPreviousPorts(i,String.valueOf(atomicFailedPort.get()));
+                    InformAllPorts(messageSendingPort,String.valueOf(atomicFailedPort.get()));
 
 
 
